@@ -10,9 +10,7 @@ os.environ["PATH"] += os.pathsep + os.path.dirname(os.path.dirname(os.path.abspa
 
 from api.models import ProcessRequest, ProcessResponse, QueryRequest, QueryResponse
 from extractor.instagram import download_reel
-from processing.video import extract_frames
-from processing.audio import transcribe_audio
-from processing.vision import analyze_frames
+from processing.vision import analyze_video_one_shot
 from qa.engine import build_knowledge_base, ask_question
 from config import DATA_DIR
 
@@ -28,37 +26,27 @@ async def process_reel_upload(file: UploadFile = File(...)):
         with open(video_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # 2. Extract Audio & Transcribe
-        print("Transcribing audio...")
-        transcript = transcribe_audio(video_path)
+        # 1. Single-Pass AI Analysis
+        print("AI is analyzing video (one-shot)...")
+        analysis = analyze_video_one_shot(video_path)
         
-        # 3. Extract Frames & Vision Analysis
-        print("Extracting frames...")
-        frames = extract_frames(video_path, interval_seconds=2)
-        print("Analyzing frames...")
-        visual_desc = analyze_frames(frames)
-        
-        # 4. Build Knowledge Base
+        # 2. Build Knowledge Base
         print("Building knowledge base...")
-        build_knowledge_base(reel_id, transcript, visual_desc)
+        build_knowledge_base(reel_id, analysis["transcript"], analysis["visual_description"])
         
-        # 5. Automated Cleanup
+        # 3. Automated Cleanup
         print("Cleaning up temporary files...")
         try:
             if video_path and os.path.exists(video_path):
                 os.remove(video_path)
-            if frames and len(frames) > 0:
-                frames_dir = os.path.dirname(frames[0])
-                if os.path.exists(frames_dir):
-                    shutil.rmtree(frames_dir)
         except Exception as e:
             print(f"Cleanup warning: {str(e)}")
             
         return ProcessResponse(
             reel_id=reel_id,
             message="Uploaded reel processed successfully",
-            transcript=transcript,
-            visual_description=visual_desc
+            transcript=analysis["transcript"],
+            visual_description=analysis["visual_description"]
         )
         
     except Exception as e:
@@ -77,37 +65,27 @@ def process_reel(request: ProcessRequest):
         if not video_path or not os.path.exists(video_path):
             raise HTTPException(status_code=500, detail="Failed to download video")
             
-        # 2. Extract Audio & Transcribe
-        print("Transcribing audio...")
-        transcript = transcribe_audio(video_path)
+        # 2. Single-Pass AI Analysis
+        print("AI is analyzing video (one-shot)...")
+        analysis = analyze_video_one_shot(video_path)
         
-        # 3. Extract Frames & Vision Analysis
-        print("Extracting frames...")
-        frames = extract_frames(video_path, interval_seconds=2)
-        print("Analyzing frames...")
-        visual_desc = analyze_frames(frames)
-        
-        # 4. Build Knowledge Base
+        # 3. Build Knowledge Base
         print("Building knowledge base...")
-        build_knowledge_base(reel_id, transcript, visual_desc)
+        build_knowledge_base(reel_id, analysis["transcript"], analysis["visual_description"])
         
-        # 5. Automated Cleanup
+        # 4. Automated Cleanup
         print("Cleaning up temporary files...")
         try:
             if video_path and os.path.exists(video_path):
                 os.remove(video_path)
-            if frames and len(frames) > 0:
-                frames_dir = os.path.dirname(frames[0])
-                if os.path.exists(frames_dir):
-                    shutil.rmtree(frames_dir)
         except Exception as e:
             print(f"Cleanup warning: {str(e)}")
         
         return ProcessResponse(
             reel_id=reel_id,
             message="Reel processed successfully",
-            transcript=transcript,
-            visual_description=visual_desc
+            transcript=analysis["transcript"],
+            visual_description=analysis["visual_description"]
         )
         
     except Exception as e:

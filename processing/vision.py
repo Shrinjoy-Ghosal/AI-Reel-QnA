@@ -1,42 +1,59 @@
 import os
 import google.generativeai as genai
-from PIL import Image
 from config import GEMINI_API_KEY
+import time
 
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+genai.configure(api_key=GEMINI_API_KEY)
 
-def analyze_frames(frame_paths: list[str]) -> str:
+def transcribe_audio(video_path: str) -> str:
+    # This is now integrated into the single-pass analysis below
+    return "Transcribed via Gemini Video API"
+
+def analyze_video_one_shot(video_path: str) -> dict:
     """
-    Analyzes a list of image frames using Gemini to generate a description.
+    Uploads the video to Gemini and gets a full transcript + visual analysis in one go.
+    This is the fastest and most reliable method for cloud hosting.
     """
-    if not GEMINI_API_KEY:
-        return "Vision analysis unavailable: GEMINI_API_KEY not set."
-        
-    if not frame_paths:
-        return "No frames provided."
-        
-    # We can use gemini-2.5-flash for multimodal tasks
-    model = genai.GenerativeModel('models/gemini-2.5-flash')
+    print(f"Uploading video to Gemini: {video_path}")
+    video_file = genai.upload_file(path=video_path)
     
-    # Load all frames
-    images = []
-    for path in frame_paths:
-        if os.path.exists(path):
-            images.append(Image.open(path))
-            
-    # To avoid rate limits or token limits, limit to say, 10 frames
-    max_frames = 10
-    if len(images) > max_frames:
-        # Sample evenly
-        step = max(1, len(images) // max_frames)
-        images = images[::step][:max_frames]
+    # Wait for the file to be processed by Google
+    while video_file.state.name == 'PROCESSING':
+        print("Gemini is watching the video...")
+        time.sleep(2)
+        video_file = genai.get_file(video_file.name)
         
-    prompt = "Describe what is happening in this sequence of video frames. Be concise but cover the main visual events, objects, and text on screen."
+    if video_file.state.name == 'FAILED':
+        raise RuntimeError("Gemini failed to process the video.")
+        
+    print("AI is analyzing video content...")
+    model = genai.GenerativeModel('models/gemini-2.0-flash')
     
-    try:
-        response = model.generate_content([prompt, *images])
-        return response.text
-    except Exception as e:
-        print(f"Error during vision analysis: {e}")
-        return f"Error analyzing visual content: {str(e)}"
+    prompt = """
+    Watch this video carefully and provide two things:
+    1. A word-for-word transcript of all spoken audio.
+    2. A detailed description of the visual events, people, and objects.
+    
+    Format your response exactly like this:
+    TRANSCRIPT: [text]
+    VISUAL: [description]
+    """
+    
+    response = model.generate_content([video_file, prompt])
+    
+    # Clean up the file from Google's servers
+    genai.delete_file(video_file.name)
+    
+    full_text = response.text
+    transcript = "No speech detected"
+    visual = "No visual analysis available"
+    
+    if "TRANSCRIPT:" in full_text and "VISUAL:" in full_text:
+        parts = full_text.split("VISUAL:")
+        transcript = parts[0].replace("TRANSCRIPT:", "").strip()
+        visual = parts[1].strip()
+    
+    return {
+        "transcript": transcript,
+        "visual_description": visual
+    }
