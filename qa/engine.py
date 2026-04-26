@@ -8,7 +8,6 @@ genai.configure(api_key=GEMINI_API_KEY)
 def build_knowledge_base(reel_id: str, transcript: str, visual_description: str):
     """
     Saves the reel data as a simple JSON file.
-    No heavy vector databases needed for short Reels!
     """
     kb_path = os.path.join(DATA_DIR, f"{reel_id}.json")
     data = {
@@ -23,6 +22,7 @@ def build_knowledge_base(reel_id: str, transcript: str, visual_description: str)
 def ask_question(reel_id: str, question: str) -> str:
     """
     Loads the reel data and asks Gemini to answer based on the full context.
+    Using gemini-1.5-flash for stability.
     """
     kb_path = os.path.join(DATA_DIR, f"{reel_id}.json")
     if not os.path.exists(kb_path):
@@ -36,7 +36,7 @@ def ask_question(reel_id: str, question: str) -> str:
     VISUAL ANALYSIS: {data['visual_description']}
     """
     
-    model = genai.GenerativeModel('models/gemini-2.0-flash')
+    model = genai.GenerativeModel('models/gemini-1.5-flash')
     
     prompt = f"""
     You are an AI assistant analyzing an Instagram Reel. 
