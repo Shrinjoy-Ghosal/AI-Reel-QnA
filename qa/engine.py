@@ -6,9 +6,6 @@ from config import DATA_DIR, GEMINI_API_KEY
 genai.configure(api_key=GEMINI_API_KEY)
 
 def build_knowledge_base(reel_id: str, transcript: str, visual_description: str):
-    """
-    Saves the reel data as a simple JSON file.
-    """
     kb_path = os.path.join(DATA_DIR, f"{reel_id}.json")
     data = {
         "reel_id": reel_id,
@@ -20,10 +17,6 @@ def build_knowledge_base(reel_id: str, transcript: str, visual_description: str)
     print(f"Knowledge base saved for {reel_id}")
 
 def ask_question(reel_id: str, question: str) -> str:
-    """
-    Loads the reel data and asks Gemini to answer based on the full context.
-    Using gemini-1.5-flash for stability.
-    """
     kb_path = os.path.join(DATA_DIR, f"{reel_id}.json")
     if not os.path.exists(kb_path):
         raise FileNotFoundError(f"No knowledge base found for reel {reel_id}")
@@ -36,20 +29,18 @@ def ask_question(reel_id: str, question: str) -> str:
     VISUAL ANALYSIS: {data['visual_description']}
     """
     
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    models_to_try = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-pro']
+    last_err = None
     
-    prompt = f"""
-    You are an AI assistant analyzing an Instagram Reel. 
-    Based on the context below, answer the user's question accurately.
-    
-    CONTEXT:
-    {context}
-    
-    QUESTION:
-    {question}
-    
-    ANSWER:
-    """
-    
-    response = model.generate_content(prompt)
-    return response.text.strip()
+    for model_name in models_to_try:
+        try:
+            print(f"DEBUG_QA: Attempting Q&A with model: {model_name}...")
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(f"CONTEXT:\n{context}\n\nQUESTION: {question}")
+            return response.text.strip()
+        except Exception as e:
+            print(f"DEBUG_QA: Model {model_name} failed: {str(e)}")
+            last_err = e
+            continue
+            
+    raise last_err if last_err else RuntimeError("All QA models failed.")
