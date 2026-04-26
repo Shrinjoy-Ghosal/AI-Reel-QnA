@@ -1,70 +1,55 @@
 import os
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain.chains import RetrievalQA
-from config import FAISS_INDEX_PATH, GEMINI_API_KEY
+import json
+import google.generativeai as genai
+from config import DATA_DIR, GEMINI_API_KEY
+
+genai.configure(api_key=GEMINI_API_KEY)
 
 def build_knowledge_base(reel_id: str, transcript: str, visual_description: str):
     """
-    Combines transcript and visual descriptions, chunks the text, and stores in FAISS.
+    Saves the reel data as a simple JSON file.
+    No heavy vector databases needed for short Reels!
     """
-    if not GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY is not set.")
-        
-    combined_text = f"--- Reel Visual Content ---\n{visual_description}\n\n--- Reel Transcript ---\n{transcript}"
-    
-    # Split text into chunks
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    chunks = text_splitter.split_text(combined_text)
-    
-    # Generate embeddings and store in FAISS
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-2", google_api_key=GEMINI_API_KEY)
-    
-    vectorstore = FAISS.from_texts(chunks, embeddings)
-    
-    # Save the index specific to this reel
-    index_path = f"{FAISS_INDEX_PATH}_{reel_id}"
-    vectorstore.save_local(index_path)
-    
-    return index_path
+    kb_path = os.path.join(DATA_DIR, f"{reel_id}.json")
+    data = {
+        "reel_id": reel_id,
+        "transcript": transcript,
+        "visual_description": visual_description
+    }
+    with open(kb_path, "w") as f:
+        json.dump(data, f)
+    print(f"Knowledge base saved for {reel_id}")
 
 def ask_question(reel_id: str, question: str) -> str:
     """
-    Loads the FAISS index for the given reel and answers the question using Gemini LLM.
+    Loads the reel data and asks Gemini to answer based on the full context.
     """
-    if not GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY is not set.")
+    kb_path = os.path.join(DATA_DIR, f"{reel_id}.json")
+    if not os.path.exists(kb_path):
+        raise FileNotFoundError(f"No knowledge base found for reel {reel_id}")
         
-    index_path = f"{FAISS_INDEX_PATH}_{reel_id}"
-    if not os.path.exists(index_path):
-        return "Knowledge base for this reel not found. Please process the reel first."
+    with open(kb_path, "r") as f:
+        data = json.load(f)
         
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-2", google_api_key=GEMINI_API_KEY)
-    vectorstore = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
+    context = f"""
+    TRANSCRIPT: {data['transcript']}
+    VISUAL ANALYSIS: {data['visual_description']}
+    """
     
-    from langchain.prompts import PromptTemplate
+    model = genai.GenerativeModel('models/gemini-2.0-flash')
     
-    prompt_template = """You are an AI assistant that analyzes Instagram reels based on the following extracted video transcript and visual descriptions. 
-    Use the following pieces of context to answer the user's question about the reel. 
-    If you don't know the answer based on the context, just say that you don't know, don't try to make up an answer.
+    prompt = f"""
+    You are an AI assistant analyzing an Instagram Reel. 
+    Based on the context below, answer the user's question accurately.
     
-    Context:
+    CONTEXT:
     {context}
     
-    Question: {question}
+    QUESTION:
+    {question}
     
-    Answer:"""
-    PROMPT = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
+    ANSWER:
+    """
     
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=GEMINI_API_KEY, temperature=0.2)
-    
-    qa_chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type="stuff",
-        retriever=vectorstore.as_retriever(),
-        chain_type_kwargs={"prompt": PROMPT}
-    )
-    
-    response = qa_chain.invoke({"query": question})
-    return response.get("result", "Sorry, I couldn't find an answer.")
+    response = model.generate_content(prompt)
+    return response.text.strip()
