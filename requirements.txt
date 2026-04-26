@@ -1,0 +1,14 @@
+setuptools
+wheel
+fastapi
+uvicorn
+pydantic
+yt-dlp
+openai-whisper
+opencv-python==4.9.0.80
+faiss-cpu==1.8.0
+langchain
+google-generativeai==0.4.1
+python-dotenv==1.0.1
+sentence-transformers==2.5.1
+numpy==1.26.4

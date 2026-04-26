@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+build/
+dist/
+
+# Project Specific
+data/
+frames_*/
+*.mp4
+*.mp3
+ffmpeg.exe
+ffprobe.exe
+
+# Mobile
+mobile_app/node_modules/
+mobile_app/.expo/
+mobile_app/dist/
