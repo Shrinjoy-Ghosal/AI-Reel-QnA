@@ -32,7 +32,7 @@ def analyze_video_one_shot(video_path: str) -> dict:
             raise RuntimeError("Gemini failed to process the video.")
             
         print("DEBUG: Initializing model gemini-1.5-flash...")
-        model = genai.GenerativeModel('models/gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
         prompt = """
         Watch this video carefully and provide two things:

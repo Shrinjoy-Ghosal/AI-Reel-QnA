@@ -6,7 +6,7 @@ pydantic
 yt-dlp
 openai-whisper
 opencv-python-headless==4.9.0.80
-google-generativeai
+google-generativeai>=0.8.3
 python-dotenv==1.0.1
 numpy==1.26.4
 Pillow

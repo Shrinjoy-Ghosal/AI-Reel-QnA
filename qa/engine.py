@@ -36,7 +36,7 @@ def ask_question(reel_id: str, question: str) -> str:
     VISUAL ANALYSIS: {data['visual_description']}
     """
     
-    model = genai.GenerativeModel('models/gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-1.5-flash')
     
     prompt = f"""
     You are an AI assistant analyzing an Instagram Reel. 
