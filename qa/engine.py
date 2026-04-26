@@ -1,9 +1,9 @@
 import os
 import json
-import google.generativeai as genai
+from google import genai
 from config import DATA_DIR, GEMINI_API_KEY
 
-genai.configure(api_key=GEMINI_API_KEY)
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 def build_knowledge_base(reel_id: str, transcript: str, visual_description: str):
     kb_path = os.path.join(DATA_DIR, f"{reel_id}.json")
@@ -29,18 +29,17 @@ def ask_question(reel_id: str, question: str) -> str:
     VISUAL ANALYSIS: {data['visual_description']}
     """
     
-    models_to_try = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-pro']
-    last_err = None
-    
-    for model_name in models_to_try:
-        try:
-            print(f"DEBUG_QA: Attempting Q&A with model: {model_name}...")
-            model = genai.GenerativeModel(model_name)
-            response = model.generate_content(f"CONTEXT:\n{context}\n\nQUESTION: {question}")
-            return response.text.strip()
-        except Exception as e:
-            print(f"DEBUG_QA: Model {model_name} failed: {str(e)}")
-            last_err = e
-            continue
-            
-    raise last_err if last_err else RuntimeError("All QA models failed.")
+    try:
+        print(f"DEBUG_QA: Asking question using new SDK...")
+        response = client.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=f"CONTEXT:\n{context}\n\nQUESTION: {question}"
+        )
+        return response.text.strip()
+    except Exception as e:
+        print(f"QA SDK ERROR: {str(e)}, falling back...")
+        response = client.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=f"CONTEXT:\n{context}\n\nQUESTION: {question}"
+        )
+        return response.text.strip()
