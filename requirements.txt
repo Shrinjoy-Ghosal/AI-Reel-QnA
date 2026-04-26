@@ -5,10 +5,13 @@ uvicorn
 pydantic
 yt-dlp
 openai-whisper
-opencv-python==4.9.0.80
+opencv-python-headless==4.9.0.80
 faiss-cpu==1.8.0
-langchain
-google-generativeai==0.4.1
+langchain==0.1.13
+langchain-text-splitters
+langchain-community
+google-generativeai
 python-dotenv==1.0.1
 sentence-transformers==2.5.1
 numpy==1.26.4
+torch --index-url https://download.pytorch.org/whl/cpu
