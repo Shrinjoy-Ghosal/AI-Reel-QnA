@@ -6,29 +6,32 @@ import time
 genai.configure(api_key=GEMINI_API_KEY)
 
 def transcribe_audio(video_path: str) -> str:
-    # Integrated into the one-shot analysis
     return "Transcribed via Gemini Video API"
 
 def analyze_video_one_shot(video_path: str) -> dict:
     """
-    Uploads the video to Gemini and gets a full transcript + visual analysis in one go.
-    Using gemini-1.5-flash for maximum stability and speed.
+    Extremely detailed logging to find the exact crash point.
     """
     try:
-        print(f"Uploading video to Gemini: {video_path}")
-        video_file = genai.upload_file(path=video_path)
+        print(f"DEBUG: Starting analyze_video_one_shot for {video_path}")
         
-        # Wait for the file to be processed by Google
+        print(f"DEBUG: Uploading file...")
+        video_file = genai.upload_file(path=video_path)
+        print(f"DEBUG: Upload successful, name: {video_file.name}")
+        
+        # Wait for the file to be processed
         while video_file.state.name == 'PROCESSING':
-            print("Gemini is watching the video...")
+            print("DEBUG: Gemini processing state: PROCESSING...")
             time.sleep(2)
             video_file = genai.get_file(video_file.name)
             
+        print(f"DEBUG: Processing complete, state: {video_file.state.name}")
+            
         if video_file.state.name == 'FAILED':
+            print("DEBUG: Processing FAILED on Google side")
             raise RuntimeError("Gemini failed to process the video.")
             
-        print("AI is analyzing video content...")
-        # Using the most stable multimodal model
+        print("DEBUG: Initializing model gemini-1.5-flash...")
         model = genai.GenerativeModel('models/gemini-1.5-flash')
         
         prompt = """
@@ -41,15 +44,24 @@ def analyze_video_one_shot(video_path: str) -> dict:
         VISUAL: [description]
         """
         
-        response = model.generate_content([video_file, prompt])
+        print("DEBUG: Calling model.generate_content (This is the likely crash point)...")
+        # Added a 2-minute timeout to the request itself
+        response = model.generate_content(
+            [video_file, prompt],
+            request_options={"timeout": 120}
+        )
+        print("DEBUG: model.generate_content returned successfully!")
         
-        # Clean up the file from Google's servers
+        # Clean up
         try:
+            print(f"DEBUG: Deleting remote file {video_file.name}")
             genai.delete_file(video_file.name)
-        except:
-            pass
+        except Exception as e:
+            print(f"DEBUG: Cleanup warning: {str(e)}")
         
         full_text = response.text
+        print(f"DEBUG: Full AI response received ({len(full_text)} chars)")
+        
         transcript = "No speech detected"
         visual = "No visual analysis available"
         
@@ -63,9 +75,10 @@ def analyze_video_one_shot(video_path: str) -> dict:
             "visual_description": visual
         }
     except Exception as e:
-        print(f"STABILITY ERROR in vision.py: {str(e)}")
-        # Provide fallback data so the app doesn't crash
+        print(f"CRITICAL ERROR in vision.py: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {
-            "transcript": "Analysis timed out or failed.",
-            "visual_description": f"Error: {str(e)}"
+            "transcript": "Analysis failed.",
+            "visual_description": f"Error: {type(e).__name__}: {str(e)}"
         }
