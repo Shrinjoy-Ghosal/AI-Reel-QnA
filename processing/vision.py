@@ -10,17 +10,18 @@ def transcribe_audio(video_path: str) -> str:
 
 def analyze_video_one_shot(video_path: str) -> dict:
     """
-    Uses the modern google-genai SDK for single-pass analysis.
+    Uses the modern google-genai SDK with audited syntax and stable model.
     """
+    video_file = None
     try:
-        print(f"DEBUG: Starting analyze_video_one_shot for {video_path}")
+        print(f"DEBUG: Starting audited analyze_video_one_shot for {video_path}")
         
-        print(f"DEBUG: Uploading file using new SDK...")
-        # Uploading using the new SDK syntax
-        video_file = client.files.upload(path=video_path)
+        print(f"DEBUG: Uploading file...")
+        # Audited: 'file' is the correct argument for the local path in google-genai V1
+        video_file = client.files.upload(file=video_path)
         print(f"DEBUG: Upload successful, name: {video_file.name}")
         
-        # Wait for processing
+        # Audited: client.files.get() is the correct method name
         while video_file.state == 'PROCESSING':
             print("DEBUG: Gemini processing state: PROCESSING...")
             time.sleep(2)
@@ -31,7 +32,7 @@ def analyze_video_one_shot(video_path: str) -> dict:
         if video_file.state == 'FAILED':
             raise RuntimeError("Gemini failed to process the video.")
             
-        print("DEBUG: Calling Gemini (New SDK) for analysis...")
+        print("DEBUG: Calling Gemini 1.5-flash (Stable) for analysis...")
         
         prompt = """
         Watch this video carefully and provide two things:
@@ -44,7 +45,7 @@ def analyze_video_one_shot(video_path: str) -> dict:
         """
 
         response = client.models.generate_content(
-            model='gemini-2.0-flash',
+            model='gemini-1.5-flash',
             contents=[video_file, prompt]
         )
         
@@ -64,23 +65,8 @@ def analyze_video_one_shot(video_path: str) -> dict:
             "visual_description": visual
         }
     except Exception as e:
-        print(f"NEW SDK ERROR in vision.py: {str(e)}")
-        # If 2.0 fails, try 1.5 as fallback
-        try:
-            print("DEBUG: Falling back to 1.5-flash...")
-            response = client.models.generate_content(
-                model='gemini-1.5-flash',
-                contents=[video_file, prompt]
-            )
-            full_text = response.text
-            parts = full_text.split("VISUAL:")
-            return {
-                "transcript": parts[0].replace("TRANSCRIPT:", "").strip() if "TRANSCRIPT:" in full_text else "No speech",
-                "visual_description": parts[1].strip() if len(parts) > 1 else "No visual"
-            }
-        except Exception as e2:
-            print(f"DOUBLE ERROR: {str(e2)}")
-            return {
-                "transcript": "Analysis failed.",
-                "visual_description": f"Error: {str(e2)}"
-            }
+        print(f"CRITICAL AUDIT ERROR: {str(e)}")
+        return {
+            "transcript": "Analysis failed.",
+            "visual_description": f"Error: {str(e)}"
+        }

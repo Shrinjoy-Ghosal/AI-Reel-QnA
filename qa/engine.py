@@ -30,16 +30,12 @@ def ask_question(reel_id: str, question: str) -> str:
     """
     
     try:
-        print(f"DEBUG_QA: Asking question using new SDK...")
-        response = client.models.generate_content(
-            model='gemini-2.0-flash',
-            contents=f"CONTEXT:\n{context}\n\nQUESTION: {question}"
-        )
-        return response.text.strip()
-    except Exception as e:
-        print(f"QA SDK ERROR: {str(e)}, falling back...")
+        # Defaulting to 1.5-flash for stable quota
         response = client.models.generate_content(
             model='gemini-1.5-flash',
             contents=f"CONTEXT:\n{context}\n\nQUESTION: {question}"
         )
         return response.text.strip()
+    except Exception as e:
+        print(f"QA ERROR: {str(e)}")
+        raise e
