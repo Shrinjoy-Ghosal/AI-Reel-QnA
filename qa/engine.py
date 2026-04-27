@@ -3,7 +3,8 @@ import json
 from google import genai
 from config import DATA_DIR, GEMINI_API_KEY
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+# Force v1 API
+client = genai.Client(api_key=GEMINI_API_KEY, http_options={'api_version': 'v1'})
 
 def build_knowledge_base(reel_id: str, transcript: str, visual_description: str):
     kb_path = os.path.join(DATA_DIR, f"{reel_id}.json")
@@ -30,12 +31,11 @@ def ask_question(reel_id: str, question: str) -> str:
     """
     
     try:
-        # Defaulting to 1.5-flash for stable quota
         response = client.models.generate_content(
             model='gemini-1.5-flash',
             contents=f"CONTEXT:\n{context}\n\nQUESTION: {question}"
         )
         return response.text.strip()
     except Exception as e:
-        print(f"QA ERROR: {str(e)}")
+        print(f"QA ERROR (v1): {str(e)}")
         raise e

@@ -3,25 +3,32 @@ import time
 from google import genai
 from config import GEMINI_API_KEY
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+# DEBUG: Verify if the API key is actually present
+if not GEMINI_API_KEY:
+    print("CRITICAL: GEMINI_API_KEY is EMPTY in the environment!")
+else:
+    # Print only first and last 4 to keep it secure
+    masked_key = f"{GEMINI_API_KEY[:4]}...{GEMINI_API_KEY[-4:]}"
+    print(f"DEBUG: GEMINI_API_KEY detected: {masked_key}")
+
+# Force the SDK to use the stable 'v1' API instead of 'v1beta'
+client = genai.Client(api_key=GEMINI_API_KEY, http_options={'api_version': 'v1'})
 
 def transcribe_audio(video_path: str) -> str:
     return "Transcribed via Gemini Video API"
 
 def analyze_video_one_shot(video_path: str) -> dict:
     """
-    Uses the modern google-genai SDK with audited syntax and stable model.
+    Uses the modern google-genai SDK with forced v1 API version.
     """
     video_file = None
     try:
-        print(f"DEBUG: Starting audited analyze_video_one_shot for {video_path}")
+        print(f"DEBUG: Starting V1 analyze_video_one_shot for {video_path}")
         
         print(f"DEBUG: Uploading file...")
-        # Audited: 'file' is the correct argument for the local path in google-genai V1
         video_file = client.files.upload(file=video_path)
         print(f"DEBUG: Upload successful, name: {video_file.name}")
         
-        # Audited: client.files.get() is the correct method name
         while video_file.state == 'PROCESSING':
             print("DEBUG: Gemini processing state: PROCESSING...")
             time.sleep(2)
@@ -32,7 +39,7 @@ def analyze_video_one_shot(video_path: str) -> dict:
         if video_file.state == 'FAILED':
             raise RuntimeError("Gemini failed to process the video.")
             
-        print("DEBUG: Calling Gemini 1.5-flash (Stable) for analysis...")
+        print("DEBUG: Calling Gemini 1.5-flash (v1) for analysis...")
         
         prompt = """
         Watch this video carefully and provide two things:
@@ -65,7 +72,7 @@ def analyze_video_one_shot(video_path: str) -> dict:
             "visual_description": visual
         }
     except Exception as e:
-        print(f"CRITICAL AUDIT ERROR: {str(e)}")
+        print(f"CRITICAL V1 ERROR: {str(e)}")
         return {
             "transcript": "Analysis failed.",
             "visual_description": f"Error: {str(e)}"
