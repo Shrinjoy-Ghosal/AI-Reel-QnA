@@ -3,30 +3,33 @@ import time
 from google import genai
 from config import GEMINI_API_KEY
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+# Clean the API key (removes hidden Windows characters or spaces)
+CLEAN_KEY = GEMINI_API_KEY.strip() if GEMINI_API_KEY else ""
+
+client = genai.Client(api_key=CLEAN_KEY)
 
 def analyze_video_one_shot(video_path: str) -> dict:
     """
-    Bulletproof: Discovers and tries all available models for this specific API key.
+    Cleans the API key and uses a fixed discovery logic.
     """
     video_file = None
     try:
-        print(f"DEBUG: Starting Bulletproof analysis for {video_path}")
+        print(f"DEBUG: Starting Clean-Discovery analysis for {video_path}")
         
-        # 1. Discover available models
+        # 1. Discover available models using fixed syntax
         available_models = []
         try:
+            print("DEBUG: Fetching available models...")
+            # In the new SDK, we check the 'supported_methods' or just try the names
             for m in client.models.list():
-                # We want models that support generateContent
-                if 'generateContent' in m.supported_generation_methods:
-                    # Clean the name (remove 'models/' if present)
-                    name = m.name.replace('models/', '')
-                    available_models.append(name)
+                # Correct attribute is 'supported_actions' or checking for 'generate_content'
+                name = m.name.replace('models/', '')
+                available_models.append(name)
             print(f"DEBUG: Discovered models: {available_models}")
         except Exception as list_err:
             print(f"DEBUG: Model discovery failed: {str(list_err)}")
-            # Fallback to standard names if discovery fails
-            available_models = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-pro-vision']
+            # Robust fallbacks
+            available_models = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-2.0-flash-exp']
 
         if not available_models:
             raise RuntimeError("No models available for this API key.")
@@ -46,7 +49,7 @@ def analyze_video_one_shot(video_path: str) -> dict:
         if video_file.state == 'FAILED':
             raise RuntimeError("Gemini failed to process the video.")
             
-        # 3. Try discovered models one by one
+        # 3. Try discovered models
         prompt = """
         Watch this video carefully and provide two things:
         1. A word-for-word transcript of all spoken audio.
@@ -91,7 +94,7 @@ def analyze_video_one_shot(video_path: str) -> dict:
             "visual_description": visual
         }
     except Exception as e:
-        print(f"BULLETPROOF ERROR: {str(e)}")
+        print(f"CLEAN-DISCOVERY ERROR: {str(e)}")
         return {
             "transcript": "Analysis failed.",
             "visual_description": f"Error: {str(e)}"

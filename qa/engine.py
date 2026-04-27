@@ -3,7 +3,9 @@ import json
 from google import genai
 from config import DATA_DIR, GEMINI_API_KEY
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+# Clean the API key
+CLEAN_KEY = GEMINI_API_KEY.strip() if GEMINI_API_KEY else ""
+client = genai.Client(api_key=CLEAN_KEY)
 
 def build_knowledge_base(reel_id: str, transcript: str, visual_description: str):
     kb_path = os.path.join(DATA_DIR, f"{reel_id}.json")
@@ -33,9 +35,8 @@ def ask_question(reel_id: str, question: str) -> str:
     available_models = []
     try:
         for m in client.models.list():
-            if 'generateContent' in m.supported_generation_methods:
-                name = m.name.replace('models/', '')
-                available_models.append(name)
+            name = m.name.replace('models/', '')
+            available_models.append(name)
         print(f"DEBUG_QA: Discovered models: {available_models}")
     except Exception as list_err:
         print(f"DEBUG_QA: Discovery failed: {str(list_err)}")
