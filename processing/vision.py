@@ -3,28 +3,35 @@ import time
 from google import genai
 from config import GEMINI_API_KEY
 
-# DEBUG: Verify if the API key is actually present
-if not GEMINI_API_KEY:
-    print("CRITICAL: GEMINI_API_KEY is EMPTY in the environment!")
-else:
-    # Print only first and last 4 to keep it secure
-    masked_key = f"{GEMINI_API_KEY[:4]}...{GEMINI_API_KEY[-4:]}"
-    print(f"DEBUG: GEMINI_API_KEY detected: {masked_key}")
-
-# Force the SDK to use the stable 'v1' API instead of 'v1beta'
-client = genai.Client(api_key=GEMINI_API_KEY, http_options={'api_version': 'v1'})
-
-def transcribe_audio(video_path: str) -> str:
-    return "Transcribed via Gemini Video API"
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 def analyze_video_one_shot(video_path: str) -> dict:
     """
-    Uses the modern google-genai SDK with forced v1 API version.
+    Bulletproof: Discovers and tries all available models for this specific API key.
     """
     video_file = None
     try:
-        print(f"DEBUG: Starting V1 analyze_video_one_shot for {video_path}")
+        print(f"DEBUG: Starting Bulletproof analysis for {video_path}")
         
+        # 1. Discover available models
+        available_models = []
+        try:
+            for m in client.models.list():
+                # We want models that support generateContent
+                if 'generateContent' in m.supported_generation_methods:
+                    # Clean the name (remove 'models/' if present)
+                    name = m.name.replace('models/', '')
+                    available_models.append(name)
+            print(f"DEBUG: Discovered models: {available_models}")
+        except Exception as list_err:
+            print(f"DEBUG: Model discovery failed: {str(list_err)}")
+            # Fallback to standard names if discovery fails
+            available_models = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-pro-vision']
+
+        if not available_models:
+            raise RuntimeError("No models available for this API key.")
+
+        # 2. Upload video
         print(f"DEBUG: Uploading file...")
         video_file = client.files.upload(file=video_path)
         print(f"DEBUG: Upload successful, name: {video_file.name}")
@@ -39,8 +46,7 @@ def analyze_video_one_shot(video_path: str) -> dict:
         if video_file.state == 'FAILED':
             raise RuntimeError("Gemini failed to process the video.")
             
-        print("DEBUG: Calling Gemini 1.5-flash (v1) for analysis...")
-        
+        # 3. Try discovered models one by one
         prompt = """
         Watch this video carefully and provide two things:
         1. A word-for-word transcript of all spoken audio.
@@ -51,12 +57,25 @@ def analyze_video_one_shot(video_path: str) -> dict:
         VISUAL: [description]
         """
 
-        response = client.models.generate_content(
-            model='gemini-1.5-flash',
-            contents=[video_file, prompt]
-        )
+        response = None
+        last_err = None
         
-        print("DEBUG: Analysis successful!")
+        for model_name in available_models:
+            try:
+                print(f"DEBUG: Trying model: {model_name}...")
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=[video_file, prompt]
+                )
+                print(f"DEBUG: SUCCESS with {model_name}!")
+                break
+            except Exception as e:
+                print(f"DEBUG: {model_name} failed: {str(e)}")
+                last_err = e
+                continue
+                
+        if not response:
+            raise last_err if last_err else RuntimeError("All available models failed.")
         
         full_text = response.text
         transcript = "No speech detected"
@@ -72,7 +91,7 @@ def analyze_video_one_shot(video_path: str) -> dict:
             "visual_description": visual
         }
     except Exception as e:
-        print(f"CRITICAL V1 ERROR: {str(e)}")
+        print(f"BULLETPROOF ERROR: {str(e)}")
         return {
             "transcript": "Analysis failed.",
             "visual_description": f"Error: {str(e)}"
